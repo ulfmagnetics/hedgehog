@@ -1,27 +1,11 @@
-import { DateAdapter } from './adapters/DateAdapter.js'
-import { HTMLAdapter } from './adapters/HTMLAdapter.js'
+import { DateAdapter, type DateAdapterConfig } from './adapters/DateAdapter.js'
+import { HTMLAdapter, type HTMLAdapterConfig } from './adapters/HTMLAdapter.js'
 import { ChainedAdapter } from './adapters/ChainedAdapter.js'
-import { CheerioAdapter } from './adapters/CheerioAdapter.js'
-import type { AdapterConfig } from './adapters/types.js'
-
-interface HTMLAdapterConfig extends AdapterConfig {
-  url: string
-  regex: string
-  timeout?: number
-}
-
-interface DateAdapterConfig extends AdapterConfig {
-  targetDate: string
-  recurringYearly?: boolean
-}
-
-interface CheerioAdapterConfig extends AdapterConfig {
-  url: string
-  selector: string
-  expectedValue?: string
-  timeout?: number
-  useXPath?: boolean
-}
+import { CheerioAdapter, type CheerioAdapterConfig } from './adapters/CheerioAdapter.js'
+import {
+  NumericRangeAdapter,
+  type NumericRangeAdapterConfig,
+} from './adapters/NumericRangeAdapter.js'
 
 async function testDateAdapter() {
   console.log('\nTesting DateAdapter:')
@@ -53,23 +37,52 @@ async function testHTMLAdapter() {
 async function testCheerioAdapter() {
   console.log('\nTesting CheerioAdapter:')
   const adapter = new CheerioAdapter()
-  const date = new Date('2025-04-18T00:00:00.000Z')
-  const expectedValue = date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  })
   await adapter.init({
     id: 'source-cheerio',
     name: 'Source Cheerio',
-    url: 'https://www.timeanddate.com/holidays/us/2025',
-    selector: '#tr149 > th.nw',
-    expectedValue,
+    url: 'https://en.wikipedia.org/wiki/Barkley_Marathons',
+    selector:
+      '#mw-content-text > div.mw-content-ltr.mw-parser-output > table.wikitable.sortable.plainrowheaders  > tbody > tr:nth-child(23) > td:nth-child(1)',
+    extractAttribute: 'rowspan',
+    expectedValue: '5', // there were 5 finishers in 2024
     timeout: 5000,
   })
   const result = await adapter.evaluate()
   console.log('Result:', result)
 }
+
+async function testNumericRangeAdapter() {
+  console.log('\nTesting NumericRangeAdapter:')
+  const adapter = new NumericRangeAdapter()
+
+  // Test inclusive range
+  await adapter.init({
+    id: 'test-range-inclusive',
+    name: 'Test Range Inclusive',
+    value: 5,
+    minValue: 1,
+    maxValue: 10,
+    inclusive: true,
+  })
+  const resultInclusive = await adapter.evaluate()
+  console.log('Inclusive Range Result:', resultInclusive)
+
+  // Test exclusive range
+  await adapter.init({
+    id: 'test-range-exclusive',
+    name: 'Test Range Exclusive',
+    value: 10,
+    minValue: 1,
+    maxValue: 10,
+    inclusive: false,
+  })
+  const resultExclusive = await adapter.evaluate()
+  console.log('Exclusive Range Result:', resultExclusive)
+}
+
+// -------------------------------------------------------------------
+// Chained Adapters
+// -------------------------------------------------------------------
 
 // Is it the Taskmaster's birthday?
 async function testChainedAdapterHTML() {
@@ -169,6 +182,57 @@ async function testChainedAdapterCheerio() {
   console.log('Result:', result)
 }
 
+async function testBarkleyFinishers() {
+  console.log('\nTesting Barkley Finishers Count:')
+  const cheerioAdapter = new CheerioAdapter()
+  const rangeAdapter = new NumericRangeAdapter()
+
+  const chainedAdapter = new ChainedAdapter<CheerioAdapterConfig, NumericRangeAdapterConfig>()
+  await chainedAdapter.init({
+    id: 'barkley-finishers',
+    name: 'Barkley Finishers Count',
+    sourceAdapter: cheerioAdapter,
+    targetAdapter: rangeAdapter,
+    sourceConfig: {
+      id: 'source-cheerio',
+      name: 'Source Cheerio',
+      url: 'https://en.wikipedia.org/wiki/Barkley_Marathons#Finishers',
+      selector:
+        '#mw-content-text > div.mw-content-ltr.mw-parser-output > table.wikitable.sortable.plainrowheaders  > tbody > tr:nth-child(23) > td:nth-child(1)',
+      extractAttribute: 'rowspan',
+      timeout: 5000,
+    },
+    targetConfig: {
+      id: 'target-range',
+      name: 'Target Range',
+      value: 0, // This will be overridden by transformResult
+      minValue: 1,
+      maxValue: 1000,
+      inclusive: true,
+    },
+    transformResult: (result) => {
+      if (!result.answer) {
+        throw new Error('Failed to fetch Barkley Marathons data')
+      }
+
+      return {
+        id: 'target-range',
+        name: 'Target Range',
+        value: parseInt(result.metadata?.matchedValue as string, 10),
+        minValue: 5,
+        maxValue: 5,
+        inclusive: true,
+      }
+    },
+  })
+  const result = await chainedAdapter.evaluate()
+  console.log('Result:', result)
+}
+
+// -------------------------------------------------------------------
+// Main harness function
+// -------------------------------------------------------------------
+
 async function main() {
   const args = process.argv.slice(2)
   const adapter = args[0]?.toLowerCase()
@@ -190,6 +254,12 @@ async function main() {
       case 'chain-cheerio':
         await testChainedAdapterCheerio()
         break
+      case 'range':
+        await testNumericRangeAdapter()
+        break
+      case 'barkley':
+        await testBarkleyFinishers()
+        break
       case undefined:
         console.log('Testing all adapters:')
         await testDateAdapter()
@@ -197,9 +267,13 @@ async function main() {
         await testChainedAdapterHTML()
         await testCheerioAdapter()
         await testChainedAdapterCheerio()
+        await testNumericRangeAdapter()
+        await testBarkleyFinishers()
         break
       default:
-        console.error('Invalid adapter specified. Use: date, html, chain, or cheerio')
+        console.error(
+          'Invalid adapter specified. Use: date, html, chain, cheerio, range, or barkley',
+        )
         process.exit(1)
     }
   } catch (error) {

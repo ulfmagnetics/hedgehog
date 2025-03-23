@@ -1,14 +1,12 @@
 import type { TruthAdapter, AdapterConfig, AdapterResult } from './types.js'
 import * as cheerio from 'cheerio'
-import * as xpath from 'xpath'
-import { DOMParser } from 'xmldom'
 
 export interface CheerioAdapterConfig extends AdapterConfig {
   url: string
-  selector: string // CSS selector or XPath
+  selector: string // CSS selector
   expectedValue?: string // Optional expected value to compare against
   timeout?: number // Optional timeout in milliseconds
-  useXPath?: boolean // Whether to use XPath instead of CSS selector
+  extractAttribute?: string // Optional attribute name to extract instead of text content
 }
 
 export class CheerioAdapter implements TruthAdapter<CheerioAdapterConfig> {
@@ -31,21 +29,10 @@ export class CheerioAdapter implements TruthAdapter<CheerioAdapterConfig> {
       const html = await response.text()
       const $ = cheerio.load(html)
 
-      let matchedValue: string | undefined
-      if (this.config.useXPath) {
-        // Use XPath if specified
-        const doc = new DOMParser().parseFromString(html)
-        const node = xpath.select(this.config.selector, doc)
-        if (typeof node === 'string') {
-          matchedValue = node
-        } else if (node && typeof node === 'object' && 'textContent' in node) {
-          matchedValue = (node as Element).textContent || undefined
-        }
-      } else {
-        // Use CSS selector
-        const element = $(this.config.selector)
-        matchedValue = element.text().trim()
-      }
+      const element = $(this.config.selector)
+      const matchedValue = this.config.extractAttribute
+        ? element.attr(this.config.extractAttribute)
+        : element.text().trim()
 
       if (!matchedValue) {
         return {
@@ -60,7 +47,10 @@ export class CheerioAdapter implements TruthAdapter<CheerioAdapterConfig> {
       return {
         answer,
         timestamp: new Date(),
-        metadata: { matchedValue },
+        metadata: {
+          matchedValue,
+          extractedAttribute: this.config.extractAttribute,
+        },
       }
     } catch (error) {
       return {
