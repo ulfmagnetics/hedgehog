@@ -1,17 +1,24 @@
-import type { TruthAdapter, AdapterConfig, AdapterResult } from './types'
+import type { TruthAdapter, AdapterConfig, AdapterResult } from './types.js'
 
-interface ChainedAdapterConfig extends AdapterConfig {
-  sourceAdapter: TruthAdapter
-  targetAdapter: TruthAdapter
-  sourceConfig: AdapterConfig
-  targetConfig: AdapterConfig
-  transformResult?: (result: AdapterResult) => AdapterConfig
+// For most use cases, this two-adapter approach is probably sufficient,
+// and if you need more complex chains, you might want to consider a different
+// pattern like a pipeline or middleware approach.
+
+interface ChainedAdapterConfig<S extends AdapterConfig, T extends AdapterConfig>
+  extends AdapterConfig {
+  sourceAdapter: TruthAdapter<S>
+  targetAdapter: TruthAdapter<T>
+  sourceConfig: S
+  targetConfig: T
+  transformResult?: (result: AdapterResult) => T
 }
 
-export class ChainedAdapter implements TruthAdapter<ChainedAdapterConfig> {
-  private config!: ChainedAdapterConfig
+export class ChainedAdapter<S extends AdapterConfig, T extends AdapterConfig>
+  implements TruthAdapter<ChainedAdapterConfig<S, T>>
+{
+  private config!: ChainedAdapterConfig<S, T>
 
-  async init(config: ChainedAdapterConfig): Promise<void> {
+  async init(config: ChainedAdapterConfig<S, T>): Promise<void> {
     this.config = config
     await this.config.sourceAdapter.init(config.sourceConfig)
     await this.config.targetAdapter.init(config.targetConfig)

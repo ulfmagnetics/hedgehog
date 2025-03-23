@@ -1,4 +1,4 @@
-import type { TruthAdapter, AdapterConfig, AdapterResult } from './types'
+import type { TruthAdapter, AdapterConfig, AdapterResult } from './types.js'
 
 interface DateAdapterConfig extends AdapterConfig {
   targetDate: string // ISO date string
