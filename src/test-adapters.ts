@@ -1,6 +1,7 @@
 import { DateAdapter } from './adapters/DateAdapter.js'
 import { HTMLAdapter } from './adapters/HTMLAdapter.js'
 import { ChainedAdapter } from './adapters/ChainedAdapter.js'
+import { CheerioAdapter } from './adapters/CheerioAdapter.js'
 import type { AdapterConfig } from './adapters/types.js'
 
 interface HTMLAdapterConfig extends AdapterConfig {
@@ -12,6 +13,14 @@ interface HTMLAdapterConfig extends AdapterConfig {
 interface DateAdapterConfig extends AdapterConfig {
   targetDate: string
   recurringYearly?: boolean
+}
+
+interface CheerioAdapterConfig extends AdapterConfig {
+  url: string
+  selector: string
+  expectedValue?: string
+  timeout?: number
+  useXPath?: boolean
 }
 
 async function testDateAdapter() {
@@ -41,7 +50,29 @@ async function testHTMLAdapter() {
   console.log('Result:', result)
 }
 
-async function testChainedAdapter() {
+async function testCheerioAdapter() {
+  console.log('\nTesting CheerioAdapter:')
+  const adapter = new CheerioAdapter()
+  const date = new Date('2025-04-18T00:00:00.000Z')
+  const expectedValue = date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+  await adapter.init({
+    id: 'source-cheerio',
+    name: 'Source Cheerio',
+    url: 'https://www.timeanddate.com/holidays/us/2025',
+    selector: '#tr149 > th.nw',
+    expectedValue,
+    timeout: 5000,
+  })
+  const result = await adapter.evaluate()
+  console.log('Result:', result)
+}
+
+// Is it the Taskmaster's birthday?
+async function testChainedAdapterHTML() {
   console.log('\nTesting ChainedAdapter:')
   const htmlAdapter = new HTMLAdapter()
   const dateAdapter = new DateAdapter()
@@ -88,6 +119,56 @@ async function testChainedAdapter() {
   console.log('Result:', result)
 }
 
+// Is it Arbor Day?
+async function testChainedAdapterCheerio() {
+  console.log('\nTesting ChainedAdapter:')
+  const cheerioAdapter = new CheerioAdapter()
+  const dateAdapter = new DateAdapter()
+
+  const chainedAdapter = new ChainedAdapter<CheerioAdapterConfig, DateAdapterConfig>()
+  await chainedAdapter.init({
+    id: 'test-chained',
+    name: 'Test Chained',
+    sourceAdapter: cheerioAdapter,
+    targetAdapter: dateAdapter,
+    sourceConfig: {
+      id: 'source-cheerio',
+      name: 'Source Cheerio',
+      url: 'https://www.timeanddate.com/holidays/us/2025',
+      selector: '#tr149 > th.nw',
+      timeout: 5000,
+    },
+    targetConfig: {
+      id: 'target-date',
+      name: 'Target Date',
+      targetDate: new Date().toISOString(), // This will be overridden by transformResult
+      recurringYearly: true, // Since we want to check against birthday every year
+    },
+    transformResult: (result) => {
+      if (!result.answer || !result.metadata?.matchedValue) {
+        throw new Error('No holiday found in HTML result')
+      }
+
+      const holiday = result.metadata.matchedValue as string
+      // Parse the date string (e.g. "Apr 18") and create a date object for this year
+      const [month, day] = holiday.split(' ')
+      const monthIndex = new Date(`${month} 1`).getMonth() // Get month index (0-11)
+      const currentYear = new Date().getFullYear()
+      const thisYearHoliday = new Date(currentYear, monthIndex, parseInt(day))
+      console.log('This year holiday:', thisYearHoliday)
+
+      return {
+        id: 'target-date',
+        name: 'Target Date',
+        targetDate: thisYearHoliday.toISOString(),
+        recurringYearly: true,
+      }
+    },
+  })
+  const result = await chainedAdapter.evaluate()
+  console.log('Result:', result)
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const adapter = args[0]?.toLowerCase()
@@ -100,17 +181,25 @@ async function main() {
       case 'html':
         await testHTMLAdapter()
         break
-      case 'chain':
-        await testChainedAdapter()
+      case 'chain-html':
+        await testChainedAdapterHTML()
+        break
+      case 'cheerio':
+        await testCheerioAdapter()
+        break
+      case 'chain-cheerio':
+        await testChainedAdapterCheerio()
         break
       case undefined:
         console.log('Testing all adapters:')
         await testDateAdapter()
         await testHTMLAdapter()
-        await testChainedAdapter()
+        await testChainedAdapterHTML()
+        await testCheerioAdapter()
+        await testChainedAdapterCheerio()
         break
       default:
-        console.error('Invalid adapter specified. Use: date, html, or chain')
+        console.error('Invalid adapter specified. Use: date, html, chain, or cheerio')
         process.exit(1)
     }
   } catch (error) {
