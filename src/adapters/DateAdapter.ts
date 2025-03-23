@@ -1,6 +1,6 @@
 import type { TruthAdapter, AdapterConfig, AdapterResult } from './types.js'
 
-interface DateAdapterConfig extends AdapterConfig {
+export interface DateAdapterConfig extends AdapterConfig {
   targetDate: string // ISO date string
   recurringYearly?: boolean
 }

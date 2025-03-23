@@ -4,7 +4,7 @@ import type { TruthAdapter, AdapterConfig, AdapterResult } from './types.js'
 // and if you need more complex chains, you might want to consider a different
 // pattern like a pipeline or middleware approach.
 
-interface ChainedAdapterConfig<S extends AdapterConfig, T extends AdapterConfig>
+export interface ChainedAdapterConfig<S extends AdapterConfig, T extends AdapterConfig>
   extends AdapterConfig {
   sourceAdapter: TruthAdapter<S>
   targetAdapter: TruthAdapter<T>

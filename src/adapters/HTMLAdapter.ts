@@ -1,6 +1,6 @@
 import type { TruthAdapter, AdapterConfig, AdapterResult } from './types.js'
 
-interface HTMLAdapterConfig extends AdapterConfig {
+export interface HTMLAdapterConfig extends AdapterConfig {
   url: string
   regex: string
   expectedMatch?: string // Optional expected value to compare against

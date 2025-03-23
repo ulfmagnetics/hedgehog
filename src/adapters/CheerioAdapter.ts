@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio'
 import * as xpath from 'xpath'
 import { DOMParser } from 'xmldom'
 
-interface CheerioAdapterConfig extends AdapterConfig {
+export interface CheerioAdapterConfig extends AdapterConfig {
   url: string
   selector: string // CSS selector or XPath
   expectedValue?: string // Optional expected value to compare against
