@@ -20,7 +20,7 @@ async function testDateAdapter() {
   await adapter.init({
     id: 'test-date',
     name: 'Test Date',
-    targetDate: new Date().toISOString(),
+    targetDate: '2023-01-01T00:00:00.000Z', // should return false
     recurringYearly: false,
   })
   const result = await adapter.evaluate()
@@ -33,8 +33,8 @@ async function testHTMLAdapter() {
   await adapter.init({
     id: 'test-html',
     name: 'Test HTML',
-    url: 'https://example.com',
-    regex: '<title>(.*?)</title>',
+    url: 'https://en.wikipedia.org/wiki/Greg_Davies',
+    regex: '<span class="bday">(.*?)</span>',
     timeout: 5000,
   })
   const result = await adapter.evaluate()
@@ -55,15 +55,33 @@ async function testChainedAdapter() {
     sourceConfig: {
       id: 'source-html',
       name: 'Source HTML',
-      url: 'https://example.com',
-      regex: '<title>(.*?)</title>',
+      url: 'https://en.wikipedia.org/wiki/Greg_Davies',
+      regex: '<span class="bday">(.*?)</span>',
       timeout: 5000,
     },
     targetConfig: {
       id: 'target-date',
       name: 'Target Date',
-      targetDate: new Date().toISOString(),
-      recurringYearly: false,
+      targetDate: new Date().toISOString(), // This will be overridden by transformResult
+      recurringYearly: true, // Since we want to check against birthday every year
+    },
+    transformResult: (result) => {
+      if (!result.answer || !result.metadata?.matchedValue) {
+        throw new Error('No birthday found in HTML result')
+      }
+
+      // The birthday is in YYYY-MM-DD format from Wikipedia
+      const birthday = result.metadata.matchedValue as string
+      // Create a date object for this year's birthday
+      const currentYear = new Date().getFullYear()
+      const thisYearBirthday = new Date(birthday.replace(/^\d{4}/, currentYear.toString()))
+
+      return {
+        id: 'target-date',
+        name: 'Target Date',
+        targetDate: thisYearBirthday.toISOString(),
+        recurringYearly: true,
+      }
     },
   })
   const result = await chainedAdapter.evaluate()
