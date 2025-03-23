@@ -16,9 +16,16 @@ export class DateAdapter implements TruthAdapter<DateAdapterConfig> {
     const now = new Date()
     const target = new Date(this.config.targetDate)
 
+    // Convert both dates to UTC to handle timezone differences
+    const nowUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const targetUTC = new Date(
+      Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate()),
+    )
+
     const isMatch = this.config.recurringYearly
-      ? now.getMonth() === target.getMonth() && now.getDate() === target.getDate()
-      : now.toDateString() === target.toDateString()
+      ? nowUTC.getUTCMonth() === targetUTC.getUTCMonth() &&
+        nowUTC.getUTCDate() === targetUTC.getUTCDate()
+      : nowUTC.getTime() === targetUTC.getTime()
 
     return {
       answer: isMatch,
